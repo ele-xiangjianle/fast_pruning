@@ -2,4 +2,4 @@ data/
 _pycache_/
 result/
 .vscode
-log/
+log_old/
