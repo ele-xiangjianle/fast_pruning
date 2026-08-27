@@ -1,0 +1,30 @@
+Arguments:
+	arch: 			resnet56
+	batch_size: 			64
+	data: 			./data
+	dist_backend: 			nccl
+	epochs: 			160
+	evaluate: 			True
+	finetune: 			-1
+	log_dir: 			./log
+	lr: 			0.1
+	master_addr: 			localhost
+	master_port: 			5678
+	momentum: 			0.9
+	ngpus_per_node: 			1
+	node_rank: 			0
+	nodes: 			1
+	output: 			result
+	print_freq: 			10
+	resume: 			result/resnet56-baseline.pth.tar
+	seed: 			2026
+	start_epoch: 			0
+	test_batch_size: 			1024
+	tips: 			None
+	type: 			basicblock
+	weight_decay: 			0.0001
+	workers: 			4
+	world_size: 			1
+Load checkpoint at epoch 158.
+Best accuracy so far 0.9379.
+Test Acc: 0.9379
