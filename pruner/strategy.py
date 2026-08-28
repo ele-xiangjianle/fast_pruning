@@ -376,6 +376,11 @@ class C_SEDP():
         self._init_selected()
         self._init_H_and_heap()
 
+    def _soft_entropy(self, Z, idx, n=None):
+        """层内软熵 D = -1/beta * ln(Z)。n 为参与 Z 求和所对应的 filter 个数，
+        子类可用它对 Z 做归一化（消除 filter 规模的影响）。"""
+        return (-1.0 / self.beta) * math.log(Z)
+
     # ==================== 初始化 ====================
 
     def _init_matrices(self):
@@ -422,10 +427,10 @@ class C_SEDP():
             self.Z.append(Z)
 
             Z_full = torch.triu(e_mat, diagonal=1).sum().item()
-            D_full = (-1.0 / self.beta) * math.log(Z_full) if Z_full > 0 else 0.0
+            D_full = self._soft_entropy(Z_full, idx, n=n) if Z_full > 0 else 0.0
             self.D_full.append(D_full)
 
-            D_l = (-1.0 / self.beta) * math.log(Z) if Z > 0 else 0.0
+            D_l = self._soft_entropy(Z, idx, n=len(sel)) if Z > 0 else 0.0
             self.n_l.append(D_l / D_full if D_full > 0 else 0.0)
 
     def _init_H_and_heap(self):
@@ -488,7 +493,7 @@ class C_SEDP():
         n_old = self.n_l[idx]
         D_full = self.D_full[idx]
         if D_full > 0:
-            n_new = (-1.0 / self.beta) * math.log(Z_new) / D_full
+            n_new = self._soft_entropy(Z_new, idx, n=len(self.selected[idx]) + 1) / D_full
         else:
             n_new = 0.0
 
@@ -538,7 +543,7 @@ class C_SEDP():
             Z_new = self.Z[idx]
             D_full = self.D_full[idx]
             if D_full > 0 and Z_new > 0:
-                D_new = (-1.0 / self.beta) * math.log(Z_new)
+                D_new = self._soft_entropy(Z_new, idx, n=len(self.selected[idx]))
                 self.n_l[idx] = D_new / D_full
 
             # 找新最佳候选
@@ -587,6 +592,25 @@ class C_SEDP():
         print(f"Total: {self.total}\tNeed to Prune: {self.n_to_prune}")
         print(f"Total kept: {self.total - self.n_to_prune}\n")
         return prune_indices
+
+
+class C_NSEDP(C_SEDP):
+    """
+    C-NSEDP：在 C-SEDP 基础上，把层内软熵的配分函数 Z 除以组合数 C(k,2)，
+    即 Z_norm = Z / C(k,2)，其中 k 为「当前已选 filter 个数」（D_full 用层的
+    filter 总数），消除 filter 规模对多样性度量的尺度影响。
+
+    其余逻辑（e 矩阵、H 增量维护、跨层最小堆、Delta 选择）与 C_SEDP 完全一致。
+    """
+
+    def _soft_entropy(self, Z, idx, n=None):
+        if n is None:
+            n = len(self.selected[idx])
+        c2 = n * (n - 1) / 2.0
+        if c2 <= 0:
+            return 0.0
+        return (-1.0 / self.beta) * math.log(Z / c2)
+
 
 class PCCFDMGurobiStrategy():
     def __init__(self, convs, ratio):

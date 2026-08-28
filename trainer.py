@@ -28,11 +28,17 @@ def log(str):
 def train(gpu, args):
     # log
     global logger
+    # 模型文件名保持原逻辑（带时间戳）
     args.filename = time.strftime('%Y-%m-%d-%H:%M', time.localtime())
     args.filename = f"{args.filename}-{args.tips}"
     if args.log_dir is not None:
         logger.set_logdir(args.log_dir)
-    logger.set_filename(f"{args.filename}-cuda:{gpu}.log")
+    # 所有 finetune 结果写入同一个日志文件（baseline 训练仍按 tips 命名）
+    if args.finetune > 0:
+        logger.set_filename("finetune.log")
+    else:
+        log_name = args.tips if args.tips else args.arch
+        logger.set_filename(f"{log_name}.log")
 
     rank = args.node_rank * args.ngpus_per_node + gpu
     dist.init_process_group(
@@ -41,6 +47,20 @@ def train(gpu, args):
         rank=rank
     )
     torch.cuda.set_device(gpu)
+
+    if rank == 0 and args.finetune > 0:
+        log("=" * 60)
+        log("Finetune Configuration:")
+        log("=" * 60)
+        log("  time        : {}".format(time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())))
+        log("  type        : {}".format(args.type))
+        log("  arch        : {}".format(args.arch))
+        log("  prune-ratio : {}".format(args.ratio))
+        log("  seed        : {}".format(args.seed))
+        log("  beta        : {}".format(args.beta))
+        log("  gamma       : {}".format(args.gamma))
+        log("=" * 60)
+
     # data set and sampler
     train_set = torchvision.datasets.CIFAR10(root=args.data,
                                              train=True,
@@ -105,7 +125,7 @@ def train(gpu, args):
             if os.path.exists(os.path.join(args.output, 'best_checkpoint.pth.tar')):
                 best_acc = load_best_acc(os.path.join(
                     args.output, 'best_checkpoint.pth.tar'))
-                log('Best accuracy so far {}.'.format(best_acc))
+                print('Best accuracy so far {}.'.format(best_acc))
         else:
             model = get_model(args).cuda(gpu)
             model = torch.nn.parallel.DistributedDataParallel(
@@ -114,8 +134,8 @@ def train(gpu, args):
                                   momentum=args.momentum, weight_decay=args.weight_decay)
             best_acc, args.start_epoch = load_muti_cuda(
                 args.resume, gpu,  model, optimizer)
-            log('Load checkpoint at epoch {}.'.format(args.start_epoch))
-            log('Best accuracy so far {}.'.format(best_acc))
+            print('Load checkpoint at epoch {}.'.format(args.start_epoch))
+            print('Best accuracy so far {}.'.format(best_acc))
     else:
         model = get_model(args).cuda(gpu)
         model = torch.nn.parallel.DistributedDataParallel(
@@ -130,10 +150,10 @@ def train(gpu, args):
         return
 
     if rank == 0:
-        log("ddp backend: {}, world size: {}".format(
+        print("ddp backend: {}, world size: {}".format(
             dist.get_backend(), dist.get_world_size()))
 
-    log("rank {} train on cuda {}".format(rank, gpu))
+    print("rank {} train on cuda {}".format(rank, gpu))
     total_step = len(train_loader)
     for epoch in range(args.start_epoch, args.epochs):
         if epoch in [args.epochs * 0.5, args.epochs * 0.75]:
@@ -154,7 +174,7 @@ def train(gpu, args):
             loss.backward()
             optimizer.step()
             if i % args.print_freq == 0:
-                log('Rank:{} Epoch: [{}/{}], Step: [{}/{}], Loss: {}'.format(
+                print('Rank:{} Epoch: [{}/{}], Step: [{}/{}], Loss: {}'.format(
                     rank, epoch + 1, args.epochs, i + 1, total_step, loss.item()))
 
         # valid
@@ -180,7 +200,7 @@ def train(gpu, args):
                     best_acc = current_acc
                     save_model(os.path.join(args.output, f'{args.tips}_best_checkpoint.pth.tar'),
                                model, current_acc)
-                log('Current Test Acc: {}'.format(current_acc))
+                print('Current Test Acc: {}'.format(current_acc))
             else:
                 save_state_dict(current_acc, model, optimizer, epoch,
                                 os.path.join(args.output, 'checkpoint.pth.tar'))
@@ -190,9 +210,9 @@ def train(gpu, args):
                                     os.path.join(args.output, 'best_checkpoint.pth.tar'))
 
     if rank == 0:
-        log('Local best accuracy so far {}'.format(local_best_acc))
+        print('Local best accuracy so far {}'.format(local_best_acc))
         log('Best accuracy so far {}'.format(best_acc))
-        log("completed!")
+        print("completed!")
 
     if rank == 0 and args.finetune > 0:
         print("[DEBUG] Writing best_acc {:.4f} to log".format(local_best_acc))
@@ -283,6 +303,12 @@ if __name__ == '__main__':
                         help='the directory used to save logs')
     parser.add_argument('--tips', default=None, type=str,
                         help='logname tips')
+    parser.add_argument('--ratio', '--prune-ratio', default=0.0, type=float,
+                        help='pruning ratio of the resumed checkpoint')
+    parser.add_argument('--beta', default=1.0, type=float,
+                        help='pruning temperature beta')
+    parser.add_argument('--gamma', default=1.0, type=float,
+                        help='pruning temperature gamma')
     parser.add_argument('-t', '--type', default='vgg', type=str,
                         help='model type (vgg or resnet)')
     parser.add_argument('-o', '--output', default='result', type=str,

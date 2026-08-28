@@ -16,12 +16,14 @@ class Logger():
     def log(self, str):
         if self.log_file is not None:
             self.log_file.write(str)
+            self.log_file.flush()
 
     def set_logdir(self, log_dir):
         self.log_dir = log_dir
 
     def set_filename(self, filename):
         if self.log_dir is not None:
+            os.makedirs(self.log_dir, exist_ok=True)
             self.log_file = open(os.path.join(self.log_dir, filename), 'a')
 
     def close(self):
