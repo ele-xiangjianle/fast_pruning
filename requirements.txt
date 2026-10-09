@@ -1,0 +1,68 @@
+# ============================================================
+# fast_pruning 环境依赖 (用于运行 prune.sh / finetune.sh)
+#
+# 说明：
+#   - prune.sh    -> 运行 prune.py     (剪枝)
+#   - finetune.sh -> 运行 trainer.py   (微调，DDP 多卡)
+#
+# 所有脚本均通过 `python3` 调用，且 trainer.py 使用 NCCL 后端做
+# 分布式训练，因此必须在 **Linux + NVIDIA GPU + CUDA** 环境运行。
+# ============================================================
+
+# ---------- 核心深度学习框架 (两个脚本都需要) ----------
+torch>=2.1.0
+torchvision>=0.16.0
+
+# numpy: strategy.py / model/resnet_bottleneck.py 直接 import numpy
+numpy>=1.21.0
+
+# ---------- prune.sh (prune.py) 专用 ----------
+# thop: FLOPs/参数量统计 (from thop import profile)
+thop>=0.1.1
+
+# pandas: 剪枝结果以 DataFrame 输出
+pandas>=1.3.0
+
+# tqdm: 距离矩阵 / 剪枝过程进度条
+tqdm>=4.60.0
+
+# ---------- 优化求解器 ----------
+# 注意：这两个包在 pruner/strategy.py 顶部被 `import gurobipy` /
+# `import pyomo.environ` 硬导入，只要 import pruner 就会触发，
+# 因此即使 prune.sh 使用默认方法 s-c-nsedp（不真正调用求解器），
+# 也必须安装，否则 import 直接报错。
+#
+# gurobipy: 需要额外安装 Gurobi Optimizer 并配置许可证(license)，
+#           否则 import 可用但 solve 时会报 "No Gurobi license found"。
+#           仅 s-pcc-fdm-gurobi 方法真正用到。
+gurobipy>=10.0.0
+
+# pyomo: 仅 s-pcc-fdm-baron / s-pcc-fdm-cplex 方法真正用到，
+#        需要额外安装 BARON / CPLEX 求解器才能求解。
+pyomo>=6.4.0
+
+# ============================================================
+# 其它环境要求 (无法用 pip 表达，这里集中说明)：
+#
+# 1. 操作系统：Linux
+#    - trainer.py 使用 torch.distributed + nccl 后端 (NCCL 仅支持 Linux)
+#    - *.sh 脚本依赖 bash (for 循环、mv)，Windows 需 WSL
+#
+# 2. GPU / CUDA：
+#    - 需要 NVIDIA GPU，且 PyTorch 为 CUDA 版本
+#    - 按本机 CUDA 版本安装 torch，例如 CUDA 11.8:
+#        pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+#    - 单卡即可 (world_size=1)，多卡时 batch_size 会被自动均分
+#
+# 3. Python 版本：3.8 ~ 3.12 均可 (见 __pycache__ 中的 cpython-310/312/38)，
+#    推荐 3.10
+#
+# 4. 数据集：CIFAR-10 需预先放到 ./data 下
+#    (trainer.py 里 download=False)，可用 CIFAR-DOWNLOAD.PY 下载
+#
+# 5. 前置产物：
+#    - prune.sh   依赖 baseline 权重 result/vgg16-baseline.pth.tar、
+#      result/resnet20-baseline.pth.tar、result/resnet56-baseline.pth.tar
+#      (由 baseline_build.sh 训练得到)
+#    - finetune.sh 依赖 prune.sh 产出的 result/*-prune-*.pth.tar
+# ============================================================

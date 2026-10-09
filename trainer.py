@@ -55,6 +55,7 @@ def train(gpu, args):
         log("  time        : {}".format(time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())))
         log("  type        : {}".format(args.type))
         log("  arch        : {}".format(args.arch))
+        log("  method      : {}".format(args.method))
         log("  prune-ratio : {}".format(args.ratio))
         log("  seed        : {}".format(args.seed))
         log("  beta        : {}".format(args.beta))
@@ -217,8 +218,14 @@ def train(gpu, args):
     if rank == 0 and args.finetune > 0:
         print("[DEBUG] Writing best_acc {:.4f} to log".format(local_best_acc))
         finetune_log_path = os.path.join(args.output, "finetune_results.txt")
+        os.makedirs(args.output, exist_ok=True)
+        write_header = not os.path.exists(finetune_log_path)
         with open(finetune_log_path, "a") as f:
-            f.write("{:.6f}\n".format(local_best_acc))
+            if write_header:
+                f.write("method\tarch\tratio\tbeta\tgamma\tseed\tacc\n")
+            f.write("{}\t{}\t{}\t{}\t{}\t{}\t{:.6f}\n".format(
+                args.method, args.arch, args.ratio, args.beta,
+                args.gamma, args.seed, local_best_acc))
     
 
 
@@ -309,6 +316,8 @@ if __name__ == '__main__':
                         help='pruning temperature beta')
     parser.add_argument('--gamma', default=1.0, type=float,
                         help='pruning temperature gamma')
+    parser.add_argument('--method', default='', type=str,
+                        help='pruning method of the resumed checkpoint')
     parser.add_argument('-t', '--type', default='vgg', type=str,
                         help='model type (vgg or resnet)')
     parser.add_argument('-o', '--output', default='result', type=str,

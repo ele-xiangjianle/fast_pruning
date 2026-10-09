@@ -371,7 +371,7 @@ class C_SEDP():
         self.best_cand = []        # index of best unselected candidate
         self.best_H = []           # H value of best candidate
 
-        print("Init distance & e-matrices for C-SEDP")
+        print(f"Init distance & e-matrices for {self.__class__.__name__}")
         self._init_matrices()
         self._init_selected()
         self._init_H_and_heap()
