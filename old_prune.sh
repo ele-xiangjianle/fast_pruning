@@ -1,4 +1,4 @@
-method=s-c-sedp # 直接取反得到剪枝结果，观察方法本身的有效性
+method=s-c-sedp-rev
 gamma=1.0
 
 for beta in 1; do
