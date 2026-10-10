@@ -612,6 +612,42 @@ class C_NSEDP(C_SEDP):
         return (-1.0 / self.beta) * math.log(Z / c2)
 
 
+class C_SEDPRev(C_SEDP):
+    """
+    C-SEDP 的反向版本：保留彼此"最相似"（最冗余、聚成一团）的 filter，剪掉离群、
+    相对独立的 filter。目标从"最大化层内多样性"翻转为"最小化层内多样性（最大化相似性）"。
+
+    与 C-SEDP 的差异只有两处，其余（含层内初始化选最远一对、e 矩阵、H 增量、
+    Z/n_l/D_full 计算、输出）全部复用基类：
+      1. 层内候选：加 H[x] 最大（与已选集合最相似）的点，而不是最小；
+      2. 跨层选择：把 Delta 取负 —— 基类用最小堆弹出"多样性提升最多"的层，
+         取负后变成弹出"多样性下降最多（相似性提升最多）"的层。
+    """
+
+    def _find_best(self, idx):
+        """反向：O(N) 找层内 H 最大（与已选集合最相似）的未选点"""
+        sel = self.selected[idx]
+        H_arr = self.H[idx]
+        n = len(H_arr)
+        best_val = float('-inf')
+        best_idx = None
+        for y in range(n):
+            if y not in sel:
+                val = H_arr[y].item()
+                if val > best_val:
+                    best_val = val
+                    best_idx = y
+        return best_val, best_idx
+
+    def _compute_delta(self, idx, cand_H):
+        """
+        反向：基类 Delta = exp(-γ·n_new) - exp(-γ·n_old) 度量"多样性收益"（越负越好）。
+        这里加入最相似的点会使 n_new < n_old（多样性下降），基类 Delta 恒为正；
+        取负后 < 0，复用基类最小堆即可选中"多样性下降最多"的层。
+        """
+        return -super()._compute_delta(idx, cand_H)
+
+
 class PCCFDMGurobiStrategy():
     def __init__(self, convs, ratio):
         self.weights = []
