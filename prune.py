@@ -100,6 +100,9 @@ def prune(model,args):
     elif args.method == 's-c-nsedp':
         return prune_c_nsedp(model, args)
 
+    elif args.method == 's-c-sedp-rev':
+        return prune_c_sedp_rev(model, args)
+
 
 
 def prune_pccfdm(model, args):
@@ -265,6 +268,36 @@ def prune_c_nsedp(model, args):
                 convs.append(block.conv2)
 
     strategy = pruner.strategy.C_NSEDP(
+        convs, args.ratio, beta=args.beta, gamma=args.gamma)
+    pruned_indices = strategy.run()
+
+    dg = pruner.DependencyGraph().build_dependency(
+        model, example_inputs=torch.randn(1, 3, 32, 32))
+    for i, conv in enumerate(convs):
+        plan = dg.get_pruning_plan(
+            conv, pruner.prune_conv, pruned_indices[i])
+        plan.exec()
+    return model
+
+
+def prune_c_sedp_rev(model, args):
+    model.eval()
+    convs = []
+    if args.type == "vgg":
+        for conv in model.modules():
+            if isinstance(conv, nn.Conv2d):
+                convs.append(conv)
+    elif args.type == "basicblock":
+        for block in model.modules():
+            if isinstance(block, resnet_basicblock.BasicBlock):
+                convs.append(block.conv1)
+    elif args.type == "bottleneck":
+        for block in model.modules():
+            if isinstance(block, torchvision.models.resnet.Bottleneck):
+                convs.append(block.conv1)
+                convs.append(block.conv2)
+
+    strategy = pruner.strategy.C_SEDPRev(
         convs, args.ratio, beta=args.beta, gamma=args.gamma)
     pruned_indices = strategy.run()
 
